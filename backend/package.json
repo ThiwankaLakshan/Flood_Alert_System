@@ -25,7 +25,8 @@
     "node-cron": "^3.0.3",
     "nodemailer": "^7.0.10",
     "pg": "^8.11.3",
-    "twilio": "^4.19.0"
+    "twilio": "^4.19.0",
+    "winston": "^3.18.3"
   },
   "devDependencies": {
     "nodemon": "^3.0.1"

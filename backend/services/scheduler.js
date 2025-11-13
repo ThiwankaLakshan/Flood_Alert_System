@@ -4,13 +4,13 @@ const pool = require('../config/database');
 
 class Scheduler {
   start() {
-    console.log('🕐 Starting scheduled jobs...');
+    console.log('Starting scheduled jobs...');
     
     // Fetch weather every 30 minutes
     // Cron format: minute hour day month day-of-week
     // '*/30 * * * *' = every 30 minutes
     cron.schedule('*/30 * * * *', async () => {
-      console.log('⏰ Running scheduled weather collection...');
+      console.log('Running scheduled weather collection...');
       
       try {
         await weatherService.fetchWeatherForAllLocations();
@@ -18,21 +18,21 @@ class Scheduler {
         // Update 24h and 72h rainfall aggregates
         await this.updateRainfallAggregates();
         
-        console.log('✅ Scheduled weather collection completed');
+        console.log('Scheduled weather collection completed');
         
       } catch (error) {
-        console.error('❌ Scheduled job error:', error);
+        console.error('Scheduled job error:', error);
         
         // Log error to database
         await this.logError(error);
       }
     });
     
-    console.log('✅ Scheduler started - weather will be collected every 30 minutes');
+    console.log('Scheduler started - weather will be collected every 30 minutes');
   }
 
   async updateRainfallAggregates() {
-    console.log('📊 Updating rainfall aggregates...');
+    console.log('Updating rainfall aggregates...');
     
     try {
       // Get all locations
@@ -74,10 +74,10 @@ class Scheduler {
         ]);
       }
       
-      console.log('✅ Rainfall aggregates updated');
+      console.log('Rainfall aggregates updated');
       
     } catch (error) {
-      console.error('❌ Error updating aggregates:', error);
+      console.error('Error updating aggregates:', error);
       throw error;
     }
   }

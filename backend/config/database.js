@@ -1,5 +1,6 @@
-require('dotenv').config();
 const { Pool } = require('pg');
+const logger = require('./logger');
+require('dotenv').config();
 
 const pool = new Pool({
     host: process.env.DB_HOST,
@@ -18,6 +19,40 @@ pool.on('error', (err) => {
     console.log('Database connection error: ', err)
 });
 
+//handle pool errors
+pool.on('error', (err) => {
+    logger.error('Unexpected database error:', err);
+});
 
+//wrapper function for safe queries
+async function query(text, params) {
+    const start = Date.now();
 
-module.exports = pool;
+    try {
+        const result = await pool.query(text, params);
+        const duration = Date.now() - start;
+
+        logger.debug('Executed query', {
+            text,
+            duration,
+            rows: result.rowCount
+        });
+
+        return result;
+
+    } catch (error) {
+        logger.error('Database query error: ', {
+            query: text,
+            params,
+            error: error.message,
+            stack: error.stack
+        });
+
+        throw error;
+    }
+}
+
+module.exports = {
+    query,
+    pool
+};

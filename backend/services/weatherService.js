@@ -1,5 +1,7 @@
 const axios = require('axios');
 const pool = require('../config/database');
+const logger = require('../config/logger');
+const { log } = require('winston');
 require('dotenv').config();
 
 const OPENWEATHER_API_KEY = process.env.OPENWEATHER_API_KEY;
@@ -9,11 +11,18 @@ class WeatherService {
   // Function 1: Single location
   async fetchWeatherForLocation(latitude, longitude, locationId) {
         try {
-            const response = await axios.get(BASE_URL, {
+            if (!OPENWEATHER_API_KEY)
+            {
+                throw new Error('OPENWEATHER_API_KEY not configured in .env');
+            }
+
+            logger.debug(`Fetching weather for location ${locationId} (${latitude}, ${longitude})`);
+
+            const response = await axios.get(OPENWEATHER_BASE_URL, {
                 params: {
                     lat: latitude,
                     lon: longitude,
-                    appid: API_KEY,
+                    appid: OPENWEATHER_API_KEY,
                     units: 'metric'
                 }
             });
@@ -35,34 +44,70 @@ class WeatherService {
             //save to database
             await this.saveWeatherData(weatherData);
 
-            console.log(`weather data fetched for location ${locationId}`);
+            logger.info(`weather data fetched for location ${locationId}: ${weatherData.temperature}°C, ${weatherData.rainfall_1h}mm rain`);
+
             return weatherData;
+
         } catch (error) {
-            console.error(`Error fetching weather for location ${locationId}: `,error);
-            throw error;
+            if (error.code === 'ECONNABORTED') {
+                logger.error(`Timeout fetching weather for location ${locationId}`);
+                throw new Error('Weather API timeout');
+            } else if (error.response) {
+                //API returned an error
+                logger.error(`API error for location ${locationId}:`, {
+                    status: error.response.status,
+                    message: error.response.data?.message
+                });
+
+                if (error.response.status === 401) {
+                    throw new Error('Invalid operWeather API key');
+                } else if (error.response.status === 429) {
+                    throw new Error('Weather API rate limit exceeded');
+                }
+
+                throw new Error(`weather API error: ${error.response.status}`);
+            } else if (error.request) {
+                logger.error(`No response from weather API for location ${locationId}`);
+                throw new Error('Weather API not responding');
+            } else {
+                logger.error(`Error fetching weather for location ${locationId}:`, error.message);
+                throw error;
+            }
         }
     }
 
-  // Function 2: ALL locations ← ADD THIS!
+  // Function 2: ALL locations
   async fetchWeatherForAllLocations() {
+    logger.info('Starting weather data collection for all locations');
         try {
             //get all locations
             const locationsResult = await pool.query('SELECT id, latitude, longitude, name FROM locations');
             const locations = locationsResult.rows;
 
-            console.log(`Fetching weather for ${locations.length} locations...`);
+            logger.info(`Fetching weather for ${locations.length} locations...`);
+
+            let successCount = 0;
+            let failureCount = 0;
 
             //fetch weather for each location
-            const promises = locations.map(loc =>
-                this.fetchWeatherForLocation(loc.latitude, loc.longitude, loc.id)
-            );
+            for (const loc of locations) {
+                try {
+                    await this.fetchWeatherForLocation(loc.latitude, loc.longitude, loc.id);
+                    successCount++;
 
-            await Promise.all(promises);
+                    await this.sleep(1000);
+                } catch (error) {
+                    failureCount++;
+                    logger.info(`Failed to fetch weather for ${loc.name} (ID: ${loc.id}):`, error.message);
+                }
+            }
 
-            console.log('Weather data fetch for all locations');
+            logger.info(`Weather collection complete: ${successCount} suceeded, ${failureCount} failed`);
+
+            return { success: successCount, failed: failureCount};
 
         } catch (error) {
-            console.error('Error fetching weather for all locations:' , error)
+            logger.error('fatal error in weather collection: ' , error);
             throw error;
         }
     }
@@ -89,9 +134,10 @@ class WeatherService {
 
         try {
             const result = await pool.query(query, values);
+            logger.debug(`Weather data saved to database, ID: ${result.rows[0].id}`);
             return result.rows[0].id;
         } catch (error) {
-            console.error('Error saving weather data:', error)
+            logger.error('Error saving weather data:', error)
             throw error;
         }
     }
