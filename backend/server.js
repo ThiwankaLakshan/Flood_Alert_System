@@ -2,6 +2,7 @@ const express = require('express');
 const cors = require('cors');
 const scheduler = require('./services/scheduler');
 const { timeStamp } = require('console');
+const adminRoutes = require('./routes/admin');
 require('dotenv').config();
 
 const app = express();
@@ -24,6 +25,8 @@ app.get('/', (req, res) => {
 app.get('/health', (req, res) => {
   res.json({ status: 'healthy' });
 });
+
+app.use('/api/admin', adminRoutes);
 
 //start scheduler
 scheduler.start();
